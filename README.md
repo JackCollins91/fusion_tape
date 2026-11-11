@@ -167,21 +167,27 @@ python demo.py
 
 After the example, `demo.py` runs the regression test. Everything it needs is inside the script.
 
-1. It pulls the benchmark texts into the git-ignored `benchmarks/` folder. These are the 2,060
-   texts the pipeline was originally evaluated on: 1,000 from ai4privacy, 1,000 from Gretel, and
-   60 long documents from a stress benchmark.
-2. It redacts them with `redact()`, without logging.
-3. It scores the redacted text alone and writes [`.Benchmark-Report.md`](.Benchmark-Report.md):
+1. It downloads two public PII datasets from the Hugging Face Hub into the git-ignored
+   `benchmarks/` folder. No account or token is needed, and nothing from them is committed.
+2. It draws 1,000 texts from each with a fixed seed. These are the same texts the pipeline was
+   originally evaluated on.
+3. It redacts them with `redact()`, without logging.
+4. It scores the redacted text alone and writes [`.Benchmark-Report.md`](.Benchmark-Report.md):
    the overall percentage of PII leaked, by benchmark and by domain, beside the figures from the
    original evaluation.
+
+| Dataset | Used | Licence |
+|---|---|---|
+| [`ai4privacy/pii-masking-200k`](https://huggingface.co/datasets/ai4privacy/pii-masking-200k) | the last 20 % of its English texts | its own licence: free for individuals and small businesses, see the dataset page |
+| [`gretelai/gretel-pii-masking-en-v1`](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1) | test and validation splits | Apache-2.0 |
 
 A PII value counts as leaked when three or more of its letters or digits are still readable. The
 marker type does not matter: a name covered by `[[USERNAME]]` is not a leak. The report is
 committed, so a change that makes the pipeline leak more shows up as a diff.
 
-The texts are looked for in `benchmarks/`, then at the path or URL in `FUSION_TAPE_BENCHMARKS`,
-then in a `pii-detector` checkout beside this repository, then in the `pii-detector` repository
-on GitHub (set `GITHUB_TOKEN` while that repository is private). The run takes several minutes.
+The first benchmark run downloads about 78 MB; later runs reuse `benchmarks/`. The run takes
+about two minutes on four CPU cores. Neither dataset annotates file paths, so the FILEPATH
+domain is not measured.
 
 ---
 

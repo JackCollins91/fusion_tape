@@ -10,21 +10,21 @@ FUSION TAPE demo — an example run with logging, then the benchmark regression 
        log/demo_log.json           the log returned by redact(..., log=True)
        log/fusion_tape.log         the operational run log (never contains input text)
 
-2. BENCHMARKS.  The texts the pipeline was originally evaluated on (pii-detector
-   evaluation notebook, §19: ai4privacy, Gretel and the long-document stress benchmark)
-   are pulled into the git-ignored ``benchmarks/`` folder, redacted WITHOUT logging,
-   and scored from the redacted text alone.  The result is written to
-   ``.Benchmark-Report.md`` next to this script — commit it, and a later change that
-   makes the pipeline leak more shows up as a diff.
+2. BENCHMARKS.  Two public PII datasets, ai4privacy and Gretel, are downloaded from
+   the Hugging Face Hub into the git-ignored ``benchmarks/`` folder (no account or
+   token needed).  The 1,000 texts of each that the pipeline was originally evaluated
+   on are redacted WITHOUT logging and scored from the redacted text alone.  The
+   result is written to ``.Benchmark-Report.md`` next to this script — commit it,
+   and a later change that makes the pipeline leak more shows up as a diff.
 
 The first run downloads the two models (~400 MB) into ./models.  Every name, number,
 address and credential in the example below is made up.
 """
 import argparse
+import ast
 import json
-import os
+import random
 import re
-import shutil
 import time
 import urllib.request
 from collections import Counter
@@ -88,25 +88,28 @@ def run_example() -> None:
 # 2. Benchmarks
 # ══════════════════════════════════════════════════════════════════════════════
 BENCHMARK_DIR = HERE / 'benchmarks'                       # git-ignored
-BENCHMARK_FILE = 'pii_validation_sets.jsonl'              # one JSON object per text: dataset, id, text, gt
+BENCHMARK_FILE = 'benchmark_texts.jsonl'                  # one JSON object per text: dataset, id, text, gt
 REPORT_FILE = HERE / '.Benchmark-Report.md'               # NOT git-ignored
 
-# Where the benchmark texts come from, tried in order until one works:
-#   1. benchmarks/pii_validation_sets.jsonl      already pulled in by an earlier run
-#   2. $FUSION_TAPE_BENCHMARKS                    a file path or URL of your choice
-#   3. ../pii-detector/pii_validation_sets.jsonl  a pii-detector checkout beside this repo
-#   4. the pii-detector repository on GitHub      (private: set GITHUB_TOKEN to use it)
-BENCHMARK_ENV = 'FUSION_TAPE_BENCHMARKS'
-BENCHMARK_SIBLING = HERE.parent / 'pii-detector' / BENCHMARK_FILE
-BENCHMARK_URL = ('https://raw.githubusercontent.com/JackCollins91/pii-detector/main/' + BENCHMARK_FILE)
+# Both datasets are public on the Hugging Face Hub and are downloaded without an
+# account or token.  Nothing from them is committed: the downloads and the prepared
+# texts stay in benchmarks/, which is git-ignored.
+#   ai4privacy/pii-masking-200k        English file, 43,501 texts with character offsets
+#   gretelai/gretel-pii-masking-en-v1  test + validation splits, 10,000 texts (Apache-2.0)
+HF = 'https://huggingface.co/datasets/'
+AI4PRIVACY_URL = HF + 'ai4privacy/pii-masking-200k/resolve/main/english_pii_43k.jsonl'
+GRETEL_URLS = [HF + 'gretelai/gretel-pii-masking-en-v1/resolve/main/data/test-00000-of-00001.parquet',
+               HF + 'gretelai/gretel-pii-masking-en-v1/resolve/main/data/validation-00000-of-00001.parquet']
+SAMPLE_TEXTS = 1_000      # texts scored per dataset
+SAMPLE_SEED = 0           # with these two values the sample is the one of the original evaluation
 
 # A PII value is scored only if it has at least this many letters/digits, and it has
 # leaked when at least this many of them are still visible in the redacted text.
 LEAK_MIN_CHARS = 3
 BATCH_TEXTS = 32                                          # texts per redact() call
 
-# Benchmark annotation label → FUSION TAPE domain.  UPPERCASE labels are ai4privacy's
-# (also used by the long-document benchmark); snake_case labels are Gretel's.  Any
+# Benchmark annotation label → FUSION TAPE domain.  UPPERCASE labels are ai4privacy's;
+# snake_case labels are Gretel's.  Any
 # other annotated label (dates, cities, job titles, …) is outside the nine domains
 # and is not scored.
 _ID_LABELS = [
@@ -134,16 +137,87 @@ DOMAIN_LABELS = {
 LABEL_DOMAIN = {label: domain for domain, labels in DOMAIN_LABELS.items() for label in labels}
 
 # What the original evaluation measured on these same texts (pii-detector evaluation
-# notebook §19; pii_pipeline_scores.json).  The report shows these beside each new run.
+# notebook, §19).  The report shows these beside each new run.
 BASELINE = {
-    'ai4privacy (selection)': {'pii': 1697, 'leaked': 11},
+    'ai4privacy': {'pii': 1697, 'leaked': 11},
     'Gretel': {'pii': 3416, 'leaked': 4},
-    'Benchmark (long docs)': {'pii': 8336, 'leaked': 40},
 }
-BASELINE_LEAKED_BY_DOMAIN = {'name': 20, 'username': 13, 'organisation': 13, 'address': 4,
-                             'id': 4, 'password': 1, 'telephone': 0, 'email': 0, 'filepath': 0}
+BASELINE_LEAKED_BY_DOMAIN = {'name': 4, 'address': 4, 'id': 4, 'username': 2, 'password': 1,
+                             'organisation': 0, 'telephone': 0, 'email': 0, 'filepath': 0}
 
 _MARKER_RE = re.compile(r'\[\[(?:%(t)s)(?:/(?:%(t)s))*\]\]' % {'t': '|'.join(DOMAIN_TAGS.values())})
+
+
+def download(url: str, folder: Path) -> Path:
+    """Download ``url`` into ``folder`` (anonymous request) unless it is already there."""
+    target = folder / url.rsplit('/', 1)[1]
+    if not target.is_file():
+        print(f'  downloading {url}')
+        partial = target.with_name(target.name + '.partial')
+        request = urllib.request.Request(url, headers={'User-Agent': 'fusion-tape-demo'})
+        with urllib.request.urlopen(request, timeout=300) as response, partial.open('wb') as out:
+            while block := response.read(1 << 20):
+                out.write(block)
+        partial.rename(target)
+    return target
+
+
+def ai4privacy_rows(path: Path) -> list[dict]:
+    """The held-out part of ai4privacy: the last 20 % of its English texts."""
+    with path.open(encoding='utf-8') as f:
+        rows = [json.loads(line) for line in f if line.strip()]
+    rows = rows[int(0.8 * len(rows)):]
+    return [{'id': str(r.get('id', '')), 'text': r['source_text'],
+             'gt': [{'label': e.get('label'), 'start': e.get('start'), 'end': e.get('end'),
+                     'value': e.get('value')} for e in r.get('privacy_mask') or []]}
+            for r in rows]
+
+
+def gretel_rows(paths: list[Path]) -> list[dict]:
+    """Gretel lists each PII value and its types but no offsets; find every occurrence."""
+    try:
+        import pyarrow.parquet as parquet
+    except ImportError:
+        raise SystemExit('The Gretel benchmark is stored as parquet: pip install pyarrow') from None
+
+    def entities(raw) -> list:
+        if isinstance(raw, list):
+            return raw
+        for parse in (json.loads, ast.literal_eval):          # stored as a Python-literal string
+            try:
+                found = parse(raw)
+                return found if isinstance(found, list) else []
+            except Exception:
+                continue
+        return []
+
+    def occurrences(text: str, value: str) -> list[tuple[int, int]]:
+        def scan(haystack, needle):
+            found, i = [], haystack.find(needle)
+            while i >= 0:
+                found.append((i, i + len(needle)))
+                i = haystack.find(needle, i + 1)
+            return found
+        spans = scan(text, value)
+        if not spans and len(text.lower()) == len(text) and len(value.lower()) == len(value):
+            spans = scan(text.lower(), value.lower())
+        return spans if len(value) >= 4 else spans[:1]         # a short value: first occurrence only
+
+    rows = []
+    for path in paths:
+        for r in parquet.read_table(path).to_pylist():
+            text, gt = r['text'], []
+            for e in entities(r['entities']):
+                value = str(e.get('entity', '')).strip()
+                types = e.get('types') or []
+                types = [types] if isinstance(types, str) else types
+                if not value or not types:
+                    continue
+                for label in types:
+                    for start, end in occurrences(text, value):
+                        gt.append({'label': label, 'start': start, 'end': end, 'value': text[start:end]})
+            rows.append({'id': str(r['uid']), 'text': text, 'gt': gt})
+    return rows
 
 
 def fetch_benchmarks() -> Path:
@@ -153,28 +227,21 @@ def fetch_benchmarks() -> Path:
         print(f'Benchmark texts: using {target}')
         return target
     BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
-    sources = [s for s in (os.environ.get(BENCHMARK_ENV), str(BENCHMARK_SIBLING), BENCHMARK_URL) if s]
-    problems = []
-    for source in sources:
-        try:
-            if source.startswith(('http://', 'https://')):
-                request = urllib.request.Request(source)
-                token = os.environ.get('GITHUB_TOKEN')
-                if token and 'github' in source:
-                    request.add_header('Authorization', f'Bearer {token}')
-                with urllib.request.urlopen(request, timeout=120) as response:
-                    data = response.read()
-                target.write_bytes(data)
-            else:
-                shutil.copyfile(Path(source).expanduser(), target)
-            print(f'Benchmark texts: pulled from {source} → {target}')
-            return target
-        except Exception as exc:                          # try the next source
-            problems.append(f'  {source}: {exc}')
-    raise SystemExit(
-        'Could not get the benchmark texts. Tried:\n' + '\n'.join(problems) +
-        f'\nPut {BENCHMARK_FILE} in {BENCHMARK_DIR}, or set {BENCHMARK_ENV} to its path or URL '
-        '(or GITHUB_TOKEN, to read it from the private pii-detector repository).')
+    print('Benchmark texts: downloading the public datasets from the Hugging Face Hub')
+    ai4privacy = ai4privacy_rows(download(AI4PRIVACY_URL, BENCHMARK_DIR))
+    gretel = gretel_rows([download(url, BENCHMARK_DIR) for url in GRETEL_URLS])
+    # One generator, used for ai4privacy first and Gretel second, as in the original evaluation.
+    rng = random.Random(SAMPLE_SEED)
+    sets = {
+        'ai4privacy': [ai4privacy[i] for i in rng.sample(range(len(ai4privacy)), SAMPLE_TEXTS)],
+        'Gretel': rng.sample(gretel, SAMPLE_TEXTS),
+    }
+    with target.open('w', encoding='utf-8') as f:
+        for name, rows in sets.items():
+            for row in rows:
+                f.write(json.dumps({'dataset': name, **row}, ensure_ascii=False) + '\n')
+    print(f'Benchmark texts: {sum(map(len, sets.values())):,} texts → {target}')
+    return target
 
 
 def load_benchmarks(path: Path) -> dict[str, list[dict]]:
@@ -349,8 +416,11 @@ def build_report(results: dict, seconds: float) -> str:
     lines += [
         '## How this is scored',
         '',
-        '* The texts are the ones scored in the pii-detector evaluation notebook (§19): 1,000',
-        '  from ai4privacy, 1,000 from Gretel, and the 60 long documents of the stress benchmark.',
+        '* The texts come from two public datasets on the Hugging Face Hub:',
+        '  `ai4privacy/pii-masking-200k` (held-out English texts) and',
+        '  `gretelai/gretel-pii-masking-en-v1` (test and validation splits).',
+        f'  {SAMPLE_TEXTS:,} texts are drawn from each with a fixed seed, which gives the same texts',
+        '  the pipeline was originally evaluated on.',
         '* Each text is passed to `redact()` without logging. Scoring uses only the redacted',
         '  text: it is lined up with the original to see which characters are still readable.',
         '  Where a short stretch of visible text could sit in more than one place, a character',

@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
+benchmark = ["pyarrow>=14.0"]
 
 [tool.setuptools]
 packages = ["fusion_tape"]
