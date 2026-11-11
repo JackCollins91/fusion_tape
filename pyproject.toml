@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fusion-tape"
+version = "0.1.0"
+description = "FUSION TAPE: an English-language PII redactor pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.48.0",
+    "numpy>=1.24",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+benchmark = ["pyarrow>=14.0"]
+
+[tool.setuptools]
+packages = ["fusion_tape"]
