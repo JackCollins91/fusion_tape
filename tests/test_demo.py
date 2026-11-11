@@ -40,8 +40,8 @@ def test_changed_text_outside_markers_is_an_error():
 
 def test_leak_needs_three_visible_letters_or_digits_and_ignores_marker_type():
     text = 'Ms Jane Doe, user jdoe'
-    gt = [{'label': 'PREFIX', 'start': 0, 'end': 2}, {'label': 'FIRSTNAME', 'start': 3, 'end': 7},
-          {'label': 'LASTNAME', 'start': 8, 'end': 11}, {'label': 'USERNAME', 'start': 18, 'end': 22},
+    gt = [{'label': 'first_name', 'start': 0, 'end': 2}, {'label': 'first_name', 'start': 3, 'end': 7},
+          {'label': 'last_name', 'start': 8, 'end': 11}, {'label': 'user_name', 'start': 18, 'end': 22},
           {'label': 'JOBTITLE', 'start': 13, 'end': 17}]
     scored = demo.score_text(text, gt, 'Ms [[USERNAME]] Doe, user [[NAME]]')
     assert [(v['value'], v['domain'], v['leaked']) for v in scored] == [

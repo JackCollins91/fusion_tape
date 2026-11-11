@@ -10,12 +10,12 @@ FUSION TAPE demo — an example run with logging, then the benchmark regression 
        log/demo_log.json           the log returned by redact(..., log=True)
        log/fusion_tape.log         the operational run log (never contains input text)
 
-2. BENCHMARKS.  Two public PII datasets, ai4privacy and Gretel, are downloaded from
-   the Hugging Face Hub into the git-ignored ``benchmarks/`` folder (no account or
-   token needed).  The 1,000 texts of each that the pipeline was originally evaluated
-   on are redacted WITHOUT logging and scored from the redacted text alone.  The
-   result is written to ``.Benchmark-Report.md`` next to this script — commit it,
-   and a later change that makes the pipeline leak more shows up as a diff.
+2. BENCHMARK.  The public Gretel PII dataset is downloaded from the Hugging Face Hub
+   into the git-ignored ``benchmarks/`` folder (no account or token needed).  The
+   1,000 of its texts that the pipeline was originally evaluated on are redacted
+   WITHOUT logging and scored from the redacted text alone.  The result is written
+   to ``.Benchmark-Report.md`` next to this script — commit it, and a later change
+   that makes the pipeline leak more shows up as a diff.
 
 The first run downloads the two models (~400 MB) into ./models.  Every name, number,
 address and credential in the example below is made up.
@@ -91,59 +91,48 @@ BENCHMARK_DIR = HERE / 'benchmarks'                       # git-ignored
 BENCHMARK_FILE = 'benchmark_texts.jsonl'                  # one JSON object per text: dataset, id, text, gt
 REPORT_FILE = HERE / '.Benchmark-Report.md'               # NOT git-ignored
 
-# Both datasets are public on the Hugging Face Hub and are downloaded without an
-# account or token.  Nothing from them is committed: the downloads and the prepared
+# The dataset is public on the Hugging Face Hub (Apache-2.0) and is downloaded without
+# an account or token.  Nothing from it is committed: the downloads and the prepared
 # texts stay in benchmarks/, which is git-ignored.
-#   ai4privacy/pii-masking-200k        English file, 43,501 texts with character offsets
-#   gretelai/gretel-pii-masking-en-v1  test + validation splits, 10,000 texts (Apache-2.0)
+#   gretelai/gretel-pii-masking-en-v1   test + validation splits, 10,000 texts
 HF = 'https://huggingface.co/datasets/'
-AI4PRIVACY_URL = HF + 'ai4privacy/pii-masking-200k/resolve/main/english_pii_43k.jsonl'
 GRETEL_URLS = [HF + 'gretelai/gretel-pii-masking-en-v1/resolve/main/data/test-00000-of-00001.parquet',
                HF + 'gretelai/gretel-pii-masking-en-v1/resolve/main/data/validation-00000-of-00001.parquet']
-SAMPLE_TEXTS = 1_000      # texts scored per dataset
-SAMPLE_SEED = 0           # with these two values the sample is the one of the original evaluation
+SAMPLE_TEXTS = 1_000      # texts scored
+SAMPLE_SEED = 0
+# The original evaluation used one seeded generator and drew 1,000 of 8,701 items from it
+# before sampling Gretel.  That draw is repeated (and discarded) so the Gretel sample is the
+# very one that was evaluated, and the baseline below stays comparable.
+SAMPLE_SKIP = (8_701, 1_000)
 
 # A PII value is scored only if it has at least this many letters/digits, and it has
 # leaked when at least this many of them are still visible in the redacted text.
 LEAK_MIN_CHARS = 3
 BATCH_TEXTS = 32                                          # texts per redact() call
 
-# Benchmark annotation label → FUSION TAPE domain.  UPPERCASE labels are ai4privacy's;
-# snake_case labels are Gretel's.  Any
-# other annotated label (dates, cities, job titles, …) is outside the nine domains
-# and is not scored.
-_ID_LABELS = [
-    'ACCOUNTNUMBER', 'CREDITCARDNUMBER', 'CREDITCARDCVV', 'SSN', 'IBAN', 'BIC', 'VEHICLEVIN',
-    'VEHICLEVRM', 'BITCOINADDRESS', 'ETHEREUMADDRESS', 'LITECOINADDRESS', 'MASKEDNUMBER',
-    'PHONEIMEI', 'IP', 'IPV4', 'IPV6', 'MAC',
-    'account_number', 'credit_card_number', 'ssn', 'customer_id', 'employee_id',
-    'medical_record_number', 'bank_routing_number', 'device_identifier', 'unique_identifier',
-    'biometric_identifier', 'certificate_license_number', 'license_plate', 'vehicle_identifier',
-    'national_id', 'tax_id', 'health_plan_beneficiary_number', 'api_key', 'swift_bic', 'ipv4',
-    'ipv6', 'cvv',
-]
+# Gretel annotation label → FUSION TAPE domain.  Any other annotated label (dates,
+# cities, …) is outside the nine domains and is not scored.  Gretel does not annotate
+# file paths, so that domain is not measured.
 DOMAIN_LABELS = {
-    'filepath': ['FILEPATH'],
-    'username': ['USERNAME', 'user_name'],
-    'id': _ID_LABELS,
-    'organisation': ['COMPANYNAME', 'company_name'],
-    'name': ['FIRSTNAME', 'LASTNAME', 'MIDDLENAME', 'PREFIX', 'first_name', 'last_name', 'name'],
-    'telephone': ['PHONENUMBER', 'phone_number'],
-    'address': ['STREET', 'STREETADDRESS', 'BUILDINGNUMBER', 'SECONDARYADDRESS', 'street_address',
-                'address'],
-    'password': ['PASSWORD', 'password'],
-    'email': ['EMAIL', 'email'],
+    'username': ['user_name'],
+    'id': ['account_number', 'credit_card_number', 'ssn', 'customer_id', 'employee_id',
+           'medical_record_number', 'bank_routing_number', 'device_identifier', 'unique_identifier',
+           'biometric_identifier', 'certificate_license_number', 'license_plate',
+           'vehicle_identifier', 'national_id', 'tax_id', 'health_plan_beneficiary_number',
+           'api_key', 'swift_bic', 'ipv4', 'ipv6', 'cvv'],
+    'organisation': ['company_name'],
+    'name': ['first_name', 'last_name', 'name'],
+    'telephone': ['phone_number'],
+    'address': ['street_address', 'address'],
+    'password': ['password'],
+    'email': ['email'],
 }
 LABEL_DOMAIN = {label: domain for domain, labels in DOMAIN_LABELS.items() for label in labels}
 
 # What the original evaluation measured on these same texts (pii-detector evaluation
 # notebook, §19).  The report shows these beside each new run.
-BASELINE = {
-    'ai4privacy': {'pii': 1697, 'leaked': 11},
-    'Gretel': {'pii': 3416, 'leaked': 4},
-}
-BASELINE_LEAKED_BY_DOMAIN = {'name': 4, 'address': 4, 'id': 4, 'username': 2, 'password': 1,
-                             'organisation': 0, 'telephone': 0, 'email': 0, 'filepath': 0}
+BASELINE = {'Gretel': {'pii': 3416, 'leaked': 4}}
+BASELINE_LEAKED_BY_DOMAIN = {'username': 2, 'address': 1, 'id': 1}
 
 _MARKER_RE = re.compile(r'\[\[(?:%(t)s)(?:/(?:%(t)s))*\]\]' % {'t': '|'.join(DOMAIN_TAGS.values())})
 
@@ -160,17 +149,6 @@ def download(url: str, folder: Path) -> Path:
                 out.write(block)
         partial.rename(target)
     return target
-
-
-def ai4privacy_rows(path: Path) -> list[dict]:
-    """The held-out part of ai4privacy: the last 20 % of its English texts."""
-    with path.open(encoding='utf-8') as f:
-        rows = [json.loads(line) for line in f if line.strip()]
-    rows = rows[int(0.8 * len(rows)):]
-    return [{'id': str(r.get('id', '')), 'text': r['source_text'],
-             'gt': [{'label': e.get('label'), 'start': e.get('start'), 'end': e.get('end'),
-                     'value': e.get('value')} for e in r.get('privacy_mask') or []]}
-            for r in rows]
 
 
 def gretel_rows(paths: list[Path]) -> list[dict]:
@@ -227,15 +205,11 @@ def fetch_benchmarks() -> Path:
         print(f'Benchmark texts: using {target}')
         return target
     BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
-    print('Benchmark texts: downloading the public datasets from the Hugging Face Hub')
-    ai4privacy = ai4privacy_rows(download(AI4PRIVACY_URL, BENCHMARK_DIR))
+    print('Benchmark texts: downloading the public dataset from the Hugging Face Hub')
     gretel = gretel_rows([download(url, BENCHMARK_DIR) for url in GRETEL_URLS])
-    # One generator, used for ai4privacy first and Gretel second, as in the original evaluation.
     rng = random.Random(SAMPLE_SEED)
-    sets = {
-        'ai4privacy': [ai4privacy[i] for i in rng.sample(range(len(ai4privacy)), SAMPLE_TEXTS)],
-        'Gretel': rng.sample(gretel, SAMPLE_TEXTS),
-    }
+    rng.sample(range(SAMPLE_SKIP[0]), SAMPLE_SKIP[1])          # see SAMPLE_SKIP
+    sets = {'Gretel': rng.sample(gretel, SAMPLE_TEXTS)}
     with target.open('w', encoding='utf-8') as f:
         for name, rows in sets.items():
             for row in rows:
@@ -384,9 +358,19 @@ def build_report(results: dict, seconds: float) -> str:
         base = BASELINE.get(name)
         was = f"{base['leaked']:,} of {base['pii']:,} ({pct(base['leaked'], base['pii'])})" if base else '—'
         lines.append(f'| {name} | {r["texts"]:,} | {r["words"]:,} | {n:,} | {k:,} | {pct(k, n)} | {was} |')
-    lines.append(f'| **All** | {sum(r["texts"] for r in results.values()):,} | {words:,} | {total:,} | '
-                 f'{leaked:,} | {pct(leaked, total)} | {base_leaked:,} of {base_total:,} '
-                 f'({pct(base_leaked, base_total)}) |')
+    if len(results) > 1:
+        lines.append(f'| **All** | {sum(r["texts"] for r in results.values()):,} | {words:,} | {total:,} | '
+                     f'{leaked:,} | {pct(leaked, total)} | {base_leaked:,} of {base_total:,} '
+                     f'({pct(base_leaked, base_total)}) |')
+
+    lines += ['', '## Speed', '',
+              f'Time spent inside `redact()`, in batches of {BATCH_TEXTS} texts on {settings.device}. '
+              'Model loading and the dataset download are not included.', '',
+              '| Benchmark | Words | Redaction time | Seconds per 1,000 words |',
+              '|---|---:|---:|---:|']
+    for name, r in results.items():
+        lines.append(f'| {name} | {r["words"]:,} | {r["seconds"]:.0f} s | '
+                     f'{r["seconds"] / max(r["words"], 1) * 1000:.2f} |')
 
     lines += ['', '## By domain', '',
               'The domain is the one the benchmark annotated, not the marker that covered it.', '',
@@ -416,11 +400,9 @@ def build_report(results: dict, seconds: float) -> str:
     lines += [
         '## How this is scored',
         '',
-        '* The texts come from two public datasets on the Hugging Face Hub:',
-        '  `ai4privacy/pii-masking-200k` (held-out English texts) and',
-        '  `gretelai/gretel-pii-masking-en-v1` (test and validation splits).',
-        f'  {SAMPLE_TEXTS:,} texts are drawn from each with a fixed seed, which gives the same texts',
-        '  the pipeline was originally evaluated on.',
+        '* The texts come from the public dataset `gretelai/gretel-pii-masking-en-v1` on the',
+        f'  Hugging Face Hub (test and validation splits). {SAMPLE_TEXTS:,} texts are drawn with a fixed',
+        '  seed, which gives the same texts the pipeline was originally evaluated on.',
         '* Each text is passed to `redact()` without logging. Scoring uses only the redacted',
         '  text: it is lined up with the original to see which characters are still readable.',
         '  Where a short stretch of visible text could sit in more than one place, a character',
@@ -434,9 +416,6 @@ def build_report(results: dict, seconds: float) -> str:
         '',
         f'* Date: {date.today().isoformat()}',
         f'* Thresholds: {thresholds}',
-        f'* Redaction time: {seconds / 60:.1f} minutes for {words:,} words '
-        f'({words / max(seconds, 1e-9):.0f} words per second, batches of {BATCH_TEXTS} texts, '
-        f'{settings.device})',
         '',
     ]
     return '\n'.join(lines)

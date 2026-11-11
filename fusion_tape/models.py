@@ -27,16 +27,11 @@ from .settings import ModelSpec
 log = logging.getLogger('fusion_tape')
 
 # ── Which model labels belong to which domain ─────────────────────────────────
-# Each list is the union of several label vocabularies (ai4privacy, nym, Presidio,
-# Nemotron-PII); it is intersected with a model's real labels when the model loads.
+# Each list is the union of several label vocabularies (nym, Presidio, Nemotron-PII); it is intersected with a model's real labels when the model loads.
 _ID_LABELS = [
-    # ai4privacy
-    'ACCOUNTNUMBER', 'CREDITCARDNUMBER', 'CREDITCARDCVV', 'SSN', 'IBAN', 'BIC', 'VEHICLEVIN',
-    'VEHICLEVRM', 'BITCOINADDRESS', 'ETHEREUMADDRESS', 'LITECOINADDRESS', 'MASKEDNUMBER',
-    'PHONEIMEI', 'IP', 'IPV4', 'IPV6', 'MAC',
     # nym
     'ACCOUNT_NUMBER', 'API_KEY', 'CREDIT_DEBIT_CARD', 'CUSTOMER_ID', 'CVV', 'DRIVERS_LICENSE',
-    'EMPLOYEE_ID', 'GOVERNMENT_ID', 'LICENSE_PLATE', 'MAC_ADDRESS', 'MEDICAL_RECORD_NUMBER',
+    'EMPLOYEE_ID', 'GOVERNMENT_ID', 'IBAN', 'SSN', 'LICENSE_PLATE', 'MAC_ADDRESS', 'MEDICAL_RECORD_NUMBER',
     'PASSPORT', 'ROUTING_NUMBER', 'SWIFT_BIC', 'TAX_ID',
     # Presidio
     'CREDIT_CARD', 'IBAN_CODE', 'FINANCIAL', 'US_BANK_NUMBER', 'US_SSN', 'US_DRIVER_LICENSE',
@@ -49,15 +44,12 @@ _ID_LABELS = [
 ]
 
 DOMAIN_LABELS: dict[str, list[str]] = {
-    'name': ['FIRSTNAME', 'LASTNAME', 'MIDDLENAME', 'PREFIX', 'GIVEN_NAME', 'SURNAME', 'PERSON',
-             'HONORIFIC', 'first_name', 'last_name'],
+    'name': ['GIVEN_NAME', 'SURNAME', 'PERSON', 'HONORIFIC', 'first_name', 'last_name'],
     'username': ['USERNAME', 'user_name', 'username'],
-    'telephone': ['PHONENUMBER', 'PHONE', 'PHONE_NUMBER', 'FAX_NUMBER', 'phone_number', 'fax_number'],
-    'address': ['STREET', 'Street', 'STREETADDRESS', 'Streetaddress', 'Street Address',
-                'BUILDINGNUMBER', 'Buildingnumber', 'Building Number', 'SECONDARYADDRESS',
-                'Secondaryaddress', 'Secondary Address', 'STREET_ADDRESS', 'STREET_NAME',
-                'BUILDING_NUMBER', 'SECONDARY_ADDRESS', 'LOCATION', 'street_address'],
-    'organisation': ['COMPANYNAME', 'COMPANY_NAME', 'ORGANIZATION', 'company_name'],
+    'telephone': ['PHONE', 'PHONE_NUMBER', 'FAX_NUMBER', 'phone_number', 'fax_number'],
+    'address': ['STREET_ADDRESS', 'STREET_NAME', 'BUILDING_NUMBER', 'SECONDARY_ADDRESS', 'LOCATION',
+                'street_address'],
+    'organisation': ['COMPANY_NAME', 'ORGANIZATION', 'company_name'],
     'id': _ID_LABELS,
     'password': ['PASSWORD', 'Password', 'password'],
 }

@@ -167,27 +167,23 @@ python demo.py
 
 After the example, `demo.py` runs the regression test. Everything it needs is inside the script.
 
-1. It downloads two public PII datasets from the Hugging Face Hub into the git-ignored
-   `benchmarks/` folder. No account or token is needed, and nothing from them is committed.
-2. It draws 1,000 texts from each with a fixed seed. These are the same texts the pipeline was
-   originally evaluated on.
+1. It downloads the public [`gretelai/gretel-pii-masking-en-v1`](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1)
+   dataset (Apache-2.0) from the Hugging Face Hub into the git-ignored `benchmarks/` folder. No
+   account or token is needed, and nothing from it is committed.
+2. It draws 1,000 texts from the test and validation splits with a fixed seed. These are the
+   same Gretel texts the pipeline was originally evaluated on.
 3. It redacts them with `redact()`, without logging.
 4. It scores the redacted text alone and writes [`.Benchmark-Report.md`](.Benchmark-Report.md):
-   the overall percentage of PII leaked, by benchmark and by domain, beside the figures from the
+   the overall percentage of PII leaked and the leaks by domain, beside the figures from the
    original evaluation.
-
-| Dataset | Used | Licence |
-|---|---|---|
-| [`ai4privacy/pii-masking-200k`](https://huggingface.co/datasets/ai4privacy/pii-masking-200k) | the last 20 % of its English texts | its own licence: free for individuals and small businesses, see the dataset page |
-| [`gretelai/gretel-pii-masking-en-v1`](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1) | test and validation splits | Apache-2.0 |
 
 A PII value counts as leaked when three or more of its letters or digits are still readable. The
 marker type does not matter: a name covered by `[[USERNAME]]` is not a leak. The report is
 committed, so a change that makes the pipeline leak more shows up as a diff.
 
-The first benchmark run downloads about 78 MB; later runs reuse `benchmarks/`. The run takes
-about two minutes on four CPU cores. Neither dataset annotates file paths, so the FILEPATH
-domain is not measured.
+The first benchmark run downloads about 4 MB; later runs reuse `benchmarks/`. The run takes
+about a minute on four CPU cores. Gretel does not annotate file paths, so the FILEPATH domain
+is not measured.
 
 ---
 
@@ -307,8 +303,8 @@ anything a model wrote, so every other character is returned exactly as it came 
 ## Things to know
 
 * **It over-censors and it can leak.** The pipes were chosen for recall. In the benchmarks the
-  pipeline leaked 0.14 to 1.57 PII values per 1,000 words and wrongly censored 4 to 32 strings
-  per 1,000 words, depending on the dataset.
+  pipeline leaked 0.14 PII values per 1,000 words and wrongly censored 12 strings per 1,000
+  words on the Gretel dataset.
 * **Names found by the models are marked `[[NAME/USERNAME]]`.** The username pipe reads the name
   labels too, which is how it catches usernames built from names.
 * **Code and tracebacks are hit hard.** Identifiers such as `sheet_name` or `warnings.warn` are
