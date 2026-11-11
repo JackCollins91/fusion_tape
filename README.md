@@ -170,12 +170,11 @@ After the example, `demo.py` runs the regression test. Everything it needs is in
 1. It downloads the public [`gretelai/gretel-pii-masking-en-v1`](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1)
    dataset (Apache-2.0) from the Hugging Face Hub into the git-ignored `benchmarks/` folder. No
    account or token is needed, and nothing from it is committed.
-2. It draws 1,000 texts from the test and validation splits with a fixed seed. These are the
-   same Gretel texts the pipeline was originally evaluated on.
+2. It draws 1,000 texts from the test and validation splits with a fixed seed, so every run
+   scores the same texts.
 3. It redacts them with `redact()`, without logging.
 4. It scores the redacted text alone and writes [`.Benchmark-Report.md`](.Benchmark-Report.md):
-   the overall percentage of PII leaked and the leaks by domain, beside the figures from the
-   original evaluation.
+   the percentage of PII leaked, the leaks by domain, and the speed in seconds per 1,000 words.
 
 A PII value counts as leaked when three or more of its letters or digits are still readable. The
 marker type does not matter: a name covered by `[[USERNAME]]` is not a leak. The report is
@@ -279,7 +278,7 @@ run through each model in batches. A model sees each string exactly once. That s
 labels every token for all domains at once; no domain triggers a model run of its own.
 
 **4. Pipes.** Each domain has its own pipe: the detector combination that reached the highest
-recall for that domain when benchmarked. Detectors within a pipe are OR-ed, so one hit is enough.
+recall for that domain when the pipeline was developed. Detectors within a pipe are OR-ed, so one hit is enough.
 
 | | Domain | Pipe | Threshold |
 |---|---|---|---|
@@ -302,9 +301,9 @@ anything a model wrote, so every other character is returned exactly as it came 
 
 ## Things to know
 
-* **It over-censors and it can leak.** The pipes were chosen for recall. In the benchmarks the
-  pipeline leaked 0.14 PII values per 1,000 words and wrongly censored 12 strings per 1,000
-  words on the Gretel dataset.
+* **It over-censors and it can leak.** The pipes were chosen for recall, so ordinary words are
+  sometimes censored, and a small share of PII still gets through. The current leak rate is in
+  [`.Benchmark-Report.md`](.Benchmark-Report.md).
 * **Names found by the models are marked `[[NAME/USERNAME]]`.** The username pipe reads the name
   labels too, which is how it catches usernames built from names.
 * **Code and tracebacks are hit hard.** Identifiers such as `sheet_name` or `warnings.warn` are

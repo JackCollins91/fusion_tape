@@ -1,5 +1,5 @@
 """
-Chunking — split, recombine, window, fit to context (pii-detector evaluation §3).
+Chunking — split, recombine, window, fit to context.
 
   Pass 1  split_sentences  – cut on sentence enders, remember what each cut was
   Pass 2  recombine        – undo cuts that are not real sentence ends
@@ -12,8 +12,7 @@ Chunking — split, recombine, window, fit to context (pii-detector evaluation �
                              any chunk over the model context is re-chunked with
                              passes 1–3 at a smaller character budget, recursively
 
-Ported from pii-detector, with its module-level settings collected into
-``ChunkConfig``.  Pass 4 only runs when a token counter is given.
+Settings are collected in ``ChunkConfig``.  Pass 4 only runs when a token counter is given.
 """
 from __future__ import annotations
 

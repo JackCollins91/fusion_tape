@@ -1,5 +1,5 @@
 """
-Text rewrites that let the NAME models see names hidden in usernames (pii-detector evaluation §8b).
+Text rewrites that let the NAME models see names hidden in usernames.
 
 ``normalise_for_names``  john_smith → john smith, JohnSmith → John Smith,
                          jane.doe92 → jane doe 92 (username-shaped tokens only)

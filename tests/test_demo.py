@@ -10,7 +10,7 @@ _spec.loader.exec_module(demo)
 
 
 def shown(original, redacted):
-    return ''.join(ch if v else '█' for ch, v in zip(original, demo.visible_mask(original, redacted)))
+    return ''.join(ch if v else '█' for ch, v in zip(original, demo.visible(original, redacted)))
 
 
 def test_mask_marks_what_each_marker_replaced():
@@ -35,17 +35,14 @@ def test_no_markers_means_everything_visible():
 
 def test_changed_text_outside_markers_is_an_error():
     with pytest.raises(ValueError):
-        demo.visible_mask('Call Jane now', 'Ring [[NAME]] now')
+        demo.visible('Call Jane now', 'Ring [[NAME]] now')
 
 
 def test_leak_needs_three_visible_letters_or_digits_and_ignores_marker_type():
     text = 'Ms Jane Doe, user jdoe'
-    gt = [{'label': 'first_name', 'start': 0, 'end': 2}, {'label': 'first_name', 'start': 3, 'end': 7},
-          {'label': 'last_name', 'start': 8, 'end': 11}, {'label': 'user_name', 'start': 18, 'end': 22},
-          {'label': 'JOBTITLE', 'start': 13, 'end': 17}]
-    scored = demo.score_text(text, gt, 'Ms [[USERNAME]] Doe, user [[NAME]]')
-    assert [(v['value'], v['domain'], v['leaked']) for v in scored] == [
-        ('Jane', 'name', False),        # covered, by a marker of another domain: not a leak
-        ('Doe', 'name', True),
-        ('jdoe', 'username', False),
-    ]                                   # 'Ms' is too short to score; JOBTITLE is not one of the nine domains
+    pii = [(0, 2, 'name'), (3, 7, 'name'), (8, 11, 'name'), (18, 22, 'username')]
+    assert demo.score(text, pii, 'Ms [[USERNAME]] Doe, user [[NAME]]') == [
+        ('name', 'Jane', False),        # covered, by a marker of another domain: not a leak
+        ('name', 'Doe', True),
+        ('username', 'jdoe', False),
+    ]                                   # 'Ms' is too short to score

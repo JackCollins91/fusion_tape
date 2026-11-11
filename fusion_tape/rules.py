@@ -1,6 +1,6 @@
 """
-Rule-based (regex) PII detectors, as benchmarked in the pii-detector evaluation notebook
-(the §-numbers below refer to its sections).
+Rule-based (regex) PII detectors.  The §-numbers are the sections of the original
+evaluation each rule was developed in.
 
 Every detector has the signature ``detect(text) -> [{'word', 'entity_group', 'start', 'end'}]``
 with offsets into ``text``.  They are pure Python and need no model.

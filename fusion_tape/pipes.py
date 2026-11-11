@@ -2,7 +2,7 @@
 The nine domain pipes.
 
 Each pipe is the detector combination that scored the highest recall for its domain
-in the pii-detector benchmarks.  Every detector in a pipe is OR-ed: a span is
+when the pipeline was developed.  Every detector in a pipe is OR-ed: a span is
 censored for the domain as soon as any one of them flags it.
 
 Model detectors never run a model.  They read the ``TokenScores`` the engine already
@@ -46,7 +46,7 @@ class Rule:
 
 
 DOMAIN_PIPES: dict[str, tuple[Model | Rule, ...]] = {
-    # F — regex only                                        benchmark recall 1.000, FPR 0.000
+    # F — regex only
     'filepath':     (Rule(rules.naive_filepath_detect),),
     # S — username labels, NAME labels on the normalised and drop-first views, username rules
     'username':     (Model('username'), Model('name', 'norm'), Rule(rules.naive_username_detect),
@@ -64,7 +64,7 @@ DOMAIN_PIPES: dict[str, tuple[Model | Rule, ...]] = {
     'address':      (Model('address'), Rule(rules.naive_street_detect)),
     # P — models + symbol / random-token / secret-key rules
     'password':     (Model('password'), Rule(rules.naive_password_detect)),
-    # E — regex only                                        benchmark recall 1.000, FPR 0.000
+    # E — regex only
     'email':        (Rule(rules.naive_email_detect),),
 }
 

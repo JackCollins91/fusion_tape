@@ -1,5 +1,5 @@
 """
-The evaluation notebook's own sanity checks (§§5–13), replayed against fusion_tape.rules.
+Sanity checks for every rule in fusion_tape.rules.
 If a rule is edited, these show whether it still behaves as evaluated.
 """
 import pytest

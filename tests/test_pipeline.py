@@ -1,7 +1,7 @@
 """
 Offline tests of the engine glue — chunking, views, thresholds, merging, markers, the
 redact() contract and settings — with a stand-in model, so no weights are downloaded.
-Detection quality is not tested here; that was benchmarked in pii-detector.
+Detection quality is not tested here; demo.py's benchmark run measures that.
 """
 import re
 from pathlib import Path
