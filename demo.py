@@ -188,6 +188,30 @@ def load_benchmarks(path: Path) -> dict[str, list[dict]]:
     return sets
 
 
+def _locate(pieces: list[str], original: str, latest: bool) -> bytearray:
+    """Place every piece in ``original``, each as early (or as late) as the others allow."""
+    mask = bytearray(len(original))
+    last = len(pieces) - 1
+    edge = len(original) if latest else 0                 # where the previously placed piece begins/ends
+    for k in (range(last, -1, -1) if latest else range(len(pieces))):
+        piece = pieces[k]
+        if k == 0:                                        # the first piece is the start of the text
+            at = 0 if original.startswith(piece) else -1
+        elif k == last:                                   # the last piece is its end
+            at = len(original) - len(piece) if original.endswith(piece) else -1
+        elif not piece:                                   # two markers side by side
+            at = edge
+        elif latest:                                      # a marker replaced at least one character
+            at = original.rfind(piece, 0, edge - 1)
+        else:
+            at = original.find(piece, edge + 1)
+        if at < 0:
+            raise ValueError('redacted text differs from the original outside the markers')
+        mask[at:at + len(piece)] = b'\x01' * len(piece)
+        edge = at if latest else at + len(piece)
+    return mask
+
+
 def visible_mask(original: str, redacted: str) -> bytearray:
     """
     Which characters of ``original`` are still readable in ``redacted``: 1 = visible,
@@ -195,31 +219,20 @@ def visible_mask(original: str, redacted: str) -> bytearray:
     text left untouched, so each such piece is located in ``original``; whatever lies
     between two located pieces is what a marker replaced.
 
-    Pieces are located from the end of the text backwards, each at its last possible
-    position.  A short piece such as ``","ip":"`` can occur more than once, and the
-    output alone cannot say which occurrence it is; taking the last one matched the
-    true censored spans on every text it was checked against.
+    A short piece can fit in more than one place: in ``[[ORGANISATION]] and
+    [[ORGANISATION]]`` the visible " and " may be any " and " of "Will and Sons and
+    Ziemann, Legros and Bogan", and the output alone cannot say which.  So the pieces
+    are placed twice, as early and as late as possible, and a character counts as
+    visible only when both placements agree.  On the benchmark texts this gives the
+    same leaks as the pipeline's true censored spans.
     """
     pieces = _MARKER_RE.split(redacted)
     if len(pieces) == 1:                                  # no markers: nothing was censored
         if redacted != original:
             raise ValueError('redacted text differs from the original outside the markers')
         return bytearray(b'\x01' * len(original))
-    mask = bytearray(len(original))
-    end = len(original)
-    for k in range(len(pieces) - 1, -1, -1):
-        piece = pieces[k]
-        if k == len(pieces) - 1:                          # the last piece is the end of the text
-            at = end - len(piece) if original.endswith(piece) else -1
-        elif k == 0:                                      # the first piece is its start
-            at = 0 if original.startswith(piece) and len(piece) < end else -1
-        else:                                             # a marker replaced at least one character
-            at = original.rfind(piece, 0, end - 1) if piece else end
-        if at < 0:
-            raise ValueError('redacted text differs from the original outside the markers')
-        mask[at:at + len(piece)] = b'\x01' * len(piece)
-        end = at
-    return mask
+    earliest, latest = _locate(pieces, original, False), _locate(pieces, original, True)
+    return bytearray(a & b for a, b in zip(earliest, latest))
 
 
 def score_text(text: str, gt: list[dict], redacted: str) -> list[dict]:
@@ -340,6 +353,8 @@ def build_report(results: dict, seconds: float) -> str:
         '  from ai4privacy, 1,000 from Gretel, and the 60 long documents of the stress benchmark.',
         '* Each text is passed to `redact()` without logging. Scoring uses only the redacted',
         '  text: it is lined up with the original to see which characters are still readable.',
+        '  Where a short stretch of visible text could sit in more than one place, a character',
+        '  counts as readable only if it is readable wherever that stretch is placed.',
         '* A PII value is an annotation of one of the nine domains with at least '
         f'{LEAK_MIN_CHARS} letters or digits.',
         f'* It has **leaked** when {LEAK_MIN_CHARS} or more of its letters or digits are still readable.',

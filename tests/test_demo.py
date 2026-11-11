@@ -23,6 +23,12 @@ def test_mask_with_markers_at_both_ends_and_combined_tags():
         '██████████ logged in as ████'
 
 
+def test_ambiguous_piece_is_not_counted_as_visible():
+    text = 'between Will and Sons and Ziemann, Legros and Bogan on Monday'
+    assert shown(text, 'between [[ORGANISATION]] and [[ORGANISATION]] on Monday') == \
+        'between ' + '█' * 43 + ' on Monday'
+
+
 def test_no_markers_means_everything_visible():
     assert shown('nothing here', 'nothing here') == 'nothing here'
 
