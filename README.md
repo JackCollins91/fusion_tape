@@ -71,10 +71,19 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
+To import FUSION TAPE from any folder, not only from this one, install it into the environment:
+
+```bash
+pip install -e .
+```
+
+After that, `from fusion_tape import redact` works in any script or notebook, and it still reads
+the `settings.yaml` in this repository.
+
 Then run the demo:
 
 ```bash
-python demo.py
+python demo.py --skip-benchmark
 ```
 
 The first run downloads two models from the Hugging Face Hub (about 400 MB) into `models/`.
@@ -146,6 +155,33 @@ time plus its share of each batch, split by token count. The times add up to the
 
 `demo.py` is a complete example: it redacts synthetic PII from every domain with `log=True`,
 writes the redacted texts to `outputs/demo_redacted.txt` and the log to `log/demo_log.json`.
+Run without `--skip-benchmark`, it then runs the benchmarks described below.
+
+---
+
+## Benchmarks
+
+```bash
+python demo.py
+```
+
+After the example, `demo.py` runs the regression test. Everything it needs is inside the script.
+
+1. It pulls the benchmark texts into the git-ignored `benchmarks/` folder. These are the 2,060
+   texts the pipeline was originally evaluated on: 1,000 from ai4privacy, 1,000 from Gretel, and
+   60 long documents from a stress benchmark.
+2. It redacts them with `redact()`, without logging.
+3. It scores the redacted text alone and writes [`.Benchmark-Report.md`](.Benchmark-Report.md):
+   the overall percentage of PII leaked, by benchmark and by domain, beside the figures from the
+   original evaluation.
+
+A PII value counts as leaked when three or more of its letters or digits are still readable. The
+marker type does not matter: a name covered by `[[USERNAME]]` is not a leak. The report is
+committed, so a change that makes the pipeline leak more shows up as a diff.
+
+The texts are looked for in `benchmarks/`, then at the path or URL in `FUSION_TAPE_BENCHMARKS`,
+then in a `pii-detector` checkout beside this repository, then in the `pii-detector` repository
+on GitHub (set `GITHUB_TOKEN` while that repository is private). The run takes several minutes.
 
 ---
 
@@ -167,7 +203,7 @@ put a `settings.yaml` next to your script.
 
 The `log` directory receives `fusion_tape.log`, an operational run log: settings in use, model
 downloads and load times, chunk counts and timings. It never contains input text.
-`models/`, `outputs/` and `log/` are git-ignored.
+`models/`, `outputs/`, `log/` and `benchmarks/` are git-ignored.
 
 ### Thresholds
 
@@ -279,10 +315,12 @@ anything a model wrote, so every other character is returned exactly as it came 
 
 ```
 settings.yaml          directories, models, runtime, chunking, thresholds
-demo.py                example run with logging → outputs/ and log/
+demo.py                example run with logging → outputs/ and log/, then the benchmark run
+.Benchmark-Report.md   latest benchmark result (written by demo.py, committed)
 requirements.txt
+pyproject.toml         lets `pip install -e .` make fusion_tape importable anywhere
 fusion_tape/
-  __init__.py          redact()
+  __init__.py          makes the folder a package; exports redact()
   settings.py          loads settings.yaml, resolves the directories
   engine.py            chunk → score once → pipes → merge, batching, timing, run log
   models.py            model download/load, one-pass token scoring per domain

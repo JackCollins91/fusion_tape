@@ -183,3 +183,5 @@ cython_debug/
 models/
 outputs/
 log/
+# benchmark texts pulled in by demo.py
+benchmarks/
