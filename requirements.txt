@@ -1,0 +1,12 @@
+# FUSION TAPE runs on CPU.  To avoid pulling the much larger CUDA build of torch on
+# Linux/Windows, install the CPU wheel first:
+#     pip install torch --index-url https://download.pytorch.org/whl/cpu
+# and then:
+#     pip install -r requirements.txt
+torch>=2.0.0
+transformers>=4.48.0      # ModernBERT support, needed by the Ettin model
+numpy>=1.24
+PyYAML>=6.0
+
+# Tests only (offline, no model download):  python -m pytest tests -q
+pytest>=7.0

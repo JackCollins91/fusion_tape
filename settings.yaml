@@ -1,0 +1,58 @@
+# FUSION TAPE — global settings.  Loaded once, on the first redact() call.
+#
+# A different file can be used by setting the FUSION_TAPE_SETTINGS environment
+# variable to its path, or by placing a settings.yaml next to the running script.
+
+# ── Directories ───────────────────────────────────────────────────────────────
+# null  → created next to the running script on first run (or in the current
+#         working directory when there is no script, e.g. a notebook or REPL).
+# Relative paths are resolved against that same location; absolute paths and ~ work.
+paths:
+  models: null      # model weights: downloaded here once, loaded from here afterwards
+  log: null         # fusion_tape.log — operational run log, never contains input text
+  outputs: null     # where your scripts (e.g. demo.py) write redacted results
+
+# ── Models ────────────────────────────────────────────────────────────────────
+# Downloaded from the Hugging Face Hub on first run only if <paths.models>/<folder>
+# does not already hold them.
+models:
+  bert_small:
+    repo: gravitee-io/bert-small-pii-detection    # BERT-small, ~29 M params, 512-token context
+    folder: gravitee_bert_small_pii
+    revision: null
+  ettin:
+    repo: kalyan-ks/ettin-68m-nemotron-pii        # Ettin, 68 M params, ~8k-token context
+    folder: ettin_nemotron_pii
+    revision: null
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+runtime:
+  device: cpu       # FUSION TAPE targets CPU; "cuda" is accepted if you have one
+  batch_size: 16    # chunks per model forward pass
+  num_threads: null # torch CPU threads; null = torch default (all cores)
+
+# ── Chunking ──────────────────────────────────────────────────────────────────
+chunking:
+  max_chunk_chars: 1000   # character window; chunks are also fitted to the model context
+  overlap_units: 2        # sentences shared by neighbouring chunks
+  token_margin: 16        # tokens kept free below the smallest model context
+
+# ── Classification thresholds ─────────────────────────────────────────────────
+# One float per model-backed domain pipe.  A token is flagged for a domain when
+#
+#     the model's top label belongs to the domain            (the benchmarked rule)
+#     OR  P(domain) >= threshold
+#
+# where P(domain) is the summed probability of every label of that domain.
+# Lowering a value censors MORE (higher recall, more false positives).  Raising it
+# towards 1.0 leaves only the benchmarked top-label rule, so the pipeline can never
+# censor less than it did when it was evaluated.
+# EMAIL and FILEPATH are regex-only pipes and have no threshold.
+thresholds:
+  name: 0.5
+  username: 0.5
+  telephone: 0.5
+  address: 0.5
+  organisation: 0.5
+  id: 0.5
+  password: 0.5

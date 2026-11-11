@@ -179,3 +179,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# FUSION TAPE runtime directories (created next to the running script)
+models/
+outputs/
+log/
