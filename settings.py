@@ -4,7 +4,7 @@ Settings — read ``settings.yaml`` and resolve the models / log / outputs direc
 Lookup order for the file:
   1. the path in the ``FUSION_TAPE_SETTINGS`` environment variable,
   2. ``settings.yaml`` next to the running script,
-  3. ``settings.yaml`` in the repository root (the one shipped with FUSION TAPE).
+  3. the ``settings.yaml`` shipped beside this file.
 Anything missing from the file falls back to the defaults below.
 """
 from __future__ import annotations
@@ -80,7 +80,7 @@ def find_settings_file() -> Path | None:
             raise FileNotFoundError(f'{SETTINGS_ENV} points to {path}, which does not exist')
         return path
     for candidate in (script_dir() / SETTINGS_NAME,
-                      Path(__file__).resolve().parent.parent / SETTINGS_NAME):
+                      Path(__file__).resolve().parent / SETTINGS_NAME):
         if candidate.is_file():
             return candidate
     return None

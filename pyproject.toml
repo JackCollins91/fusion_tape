@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fusion-tape"
-version = "0.1.0"
+version = "0.2.0"
 description = "FUSION TAPE: an English-language PII redactor pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,3 +22,4 @@ benchmark = ["pyarrow>=14.0"]
 
 [tool.setuptools]
 packages = ["fusion_tape"]
+package-dir = { fusion_tape = "." }

@@ -9,18 +9,25 @@ FUSION TAPE — an English-language PII redactor pipeline.
     redacted, log = redact(['first text', 'second text'], log=True)
     # redacted is a list; log is [(input, {'pii string': '[[MARKER]]'}, milliseconds), ...]
 
+    redacted, log = redact('Call Jane Doe on +44 20 7946 0958', skip=['names', 'usernames'])
+    # the NAME and USERNAME pipes are left out
+
+The import name is the name of this folder: every module sits directly in it, so the
+folder can be dropped into another project as it is.  Name it ``fusion_tape`` there
+(a hyphen is not allowed in ``import``).
+
 Everything is configured in ``settings.yaml``.  Models are downloaded on the first
 call only and nothing but those downloads ever touches the network.
 """
 from __future__ import annotations
 
-from .spans import DOMAIN_TAGS, DOMAINS  # noqa: F401
+from .spans import DOMAIN_TAGS, DOMAINS, SKIP_KEYWORDS, skipped_domains  # noqa: F401
 
-__all__ = ['redact', 'get_settings', 'DOMAINS', 'DOMAIN_TAGS']
-__version__ = '0.1.0'
+__all__ = ['redact', 'get_settings', 'DOMAINS', 'DOMAIN_TAGS', 'SKIP_KEYWORDS']
+__version__ = '0.2.0'
 
 
-def redact(text: str | list[str], log: bool = False):
+def redact(text: str | list[str], log: bool = False, skip: str | list[str] | None = None):
     """
     Replace PII in ``text`` with censorship markers such as ``[[EMAIL]]`` or
     ``[[NAME/USERNAME]]`` (every domain that flagged the string).
@@ -29,6 +36,11 @@ def redact(text: str | list[str], log: bool = False):
     ----------
     text : a string, or a list of strings (processed together in batches).
     log  : also return a per-text log.
+    skip : a keyword, or a list of keywords, naming domain pipes to leave out of the
+           pipeline.  The keywords are the words of the FUSION TAPE acronym:
+           ``filepaths``, ``usernames``, ``ids``, ``organisations``, ``names``,
+           ``telephone``, ``address``, ``password``, ``email`` (any letter case).
+           Anything else raises ``ValueError``.
 
     Returns
     -------
@@ -42,8 +54,9 @@ def redact(text: str | list[str], log: bool = False):
     texts = [text] if single else list(text)
     if not all(isinstance(t, str) for t in texts):
         raise TypeError('text must be a string or a list of strings')
+    skipped = skipped_domains(skip)                      # validated before any model is loaded
     from .engine import get_engine
-    redacted, entries = get_engine().redact_many(texts)
+    redacted, entries = get_engine().redact_many(texts, skipped)
     return (redacted[0] if single else redacted), (entries if log else None)
 
 

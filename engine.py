@@ -18,9 +18,9 @@ import time
 from functools import lru_cache
 
 from .chunking import ChunkConfig, chunk_document
-from .models import PIIModel, load_model
+from .scorer import PIIModel, load_model
 from .normalise import drop_first_letter, normalise_for_names
-from .pipes import VIEWS_USED, ChunkViews, detect_chunk
+from .pipes import ChunkViews, detect_chunk, views_used
 from .settings import Settings, load_settings
 from .spans import marker, merge_spans, render
 
@@ -75,9 +75,9 @@ class Engine:
     def chunk(self, text: str) -> list[dict]:
         return chunk_document(text, self.chunk_config, self.count_tokens, self.context_tokens)
 
-    def views(self, chunk_text: str) -> ChunkViews:
+    def views(self, chunk_text: str, needed: frozenset[str] = frozenset({'norm', 'drop'})) -> ChunkViews:
         views = ChunkViews(chunk_text)
-        if 'norm' in VIEWS_USED:
+        if 'norm' in needed:
             norm, idx = normalise_for_names(chunk_text)
             if norm != chunk_text:
                 views.norm_idx = idx
@@ -87,16 +87,19 @@ class Engine:
                         norm, self.chunk_config, self.count_tokens, self.context_tokens))
                 else:
                     views.norm_pieces = ((norm, 0),)
-        if 'drop' in VIEWS_USED:
+        if 'drop' in needed:
             dropped, idx, tokens = drop_first_letter(chunk_text, self.is_vocab_word)
             if tokens:
                 views.drop_text, views.drop_idx, views.drop_tokens = dropped, idx, tuple(tokens)
         return views
 
     # ── Redaction ─────────────────────────────────────────────────────────────
-    def redact_many(self, texts: list[str]) -> tuple[list[str], list[LogEntry]]:
-        """Redact ``texts`` together.  Returns the redacted texts and one log entry each."""
+    def redact_many(self, texts: list[str],
+                    skip: frozenset[str] = frozenset()) -> tuple[list[str], list[LogEntry]]:
+        """Redact ``texts`` together, leaving out the domain pipes in ``skip``.
+        Returns the redacted texts and one log entry each."""
         t_call = time.perf_counter()
+        needed = views_used(skip)                    # empty → no pipe reads the models at all
         seconds = [0.0] * len(texts)
         chunks: list[list[dict]] = []
         views: dict[str, ChunkViews] = {}            # chunk text → its views (shared by duplicates)
@@ -107,8 +110,8 @@ class Engine:
             chunks.append(self.chunk(text) if text.strip() else [])
             for c in chunks[i]:
                 if c['text'] not in views:
-                    views[c['text']] = self.views(c['text'])
-                for s in views[c['text']].strings():
+                    views[c['text']] = self.views(c['text'], needed)
+                for s in views[c['text']].strings() if needed else ():
                     owners.setdefault(s, set()).add(i)
             seconds[i] += time.perf_counter() - t0
 
@@ -128,7 +131,7 @@ class Engine:
             t0 = time.perf_counter()
             spans = set()
             for c in chunks[i]:
-                for s, e, domain in detect_chunk(views[c['text']], scores, self.settings.thresholds):
+                for s, e, domain in detect_chunk(views[c['text']], scores, self.settings.thresholds, skip):
                     spans.add((c['start'] + s, c['start'] + e, domain))
             segments = merge_spans(spans)
             redacted.append(render(text, segments))
@@ -137,9 +140,9 @@ class Engine:
             entries.append((text, found, round(seconds[i] * 1000, 3)))
 
         log.info('redact: %d text(s), %d chars, %d chunk(s), %d scored string(s) x %d model(s), '
-                 '%d segment(s) censored, %.0f ms',
+                 '%d segment(s) censored, skipped: %s, %.0f ms',
                  len(texts), sum(map(len, texts)), sum(map(len, chunks)), len(strings),
-                 len(self.models), sum(len(e[1]) for e in entries),
+                 len(self.models), sum(len(e[1]) for e in entries), ', '.join(sorted(skip)) or 'none',
                  (time.perf_counter() - t_call) * 1000)
         return redacted, entries
 
