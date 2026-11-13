@@ -12,10 +12,6 @@ FUSION TAPE — an English-language PII redactor pipeline.
     redacted, log = redact('Call Jane Doe on +44 20 7946 0958', skip=['names', 'usernames'])
     # the NAME and USERNAME pipes are left out
 
-The import name is the name of this folder: every module sits directly in it, so the
-folder can be dropped into another project as it is.  Name it ``fusion_tape`` there
-(a hyphen is not allowed in ``import``).
-
 Everything is configured in ``settings.yaml``.  Models are downloaded on the first
 call only and nothing but those downloads ever touches the network.
 """
