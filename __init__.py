@@ -20,7 +20,7 @@ from __future__ import annotations
 from .spans import DOMAIN_TAGS, DOMAINS, SKIP_KEYWORDS, skipped_domains  # noqa: F401
 
 __all__ = ['redact', 'get_settings', 'DOMAINS', 'DOMAIN_TAGS', 'SKIP_KEYWORDS']
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 
 def redact(text: str | list[str], log: bool = False, skip: str | list[str] | None = None):
