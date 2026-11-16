@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "YOUR PROJECT TITLE"
+type: software
+doi: 10.5281/zenodo.24272652
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24272652
+    description: "Zenodo archive of this software"
+authors:
+  - family-names: "Collins"
+    given-names: "John"
+    orcid: "https://orcid.org/0000-0003-0282-927X"
+repository-code: "https://github.com/YOUR-USERNAME/YOUR-REPO"
