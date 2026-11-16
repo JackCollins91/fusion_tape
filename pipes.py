@@ -25,7 +25,7 @@ from typing import Callable
 import numpy as np
 
 from . import rules
-from .models import MODEL_DOMAINS, TokenScores
+from .scorer import MODEL_DOMAINS, TokenScores
 from .normalise import map_span_back
 from .spans import clean_span
 
@@ -68,8 +68,10 @@ DOMAIN_PIPES: dict[str, tuple[Model | Rule, ...]] = {
     'email':        (Rule(rules.naive_email_detect),),
 }
 
-VIEWS_USED: frozenset[str] = frozenset(
-    d.view for pipe in DOMAIN_PIPES.values() for d in pipe if isinstance(d, Model))
+def views_used(skip: frozenset[str] = frozenset()) -> frozenset[str]:
+    """The chunk views the pipes that are not skipped need the models to score."""
+    return frozenset(d.view for domain, pipe in DOMAIN_PIPES.items() if domain not in skip
+                     for d in pipe if isinstance(d, Model))
 
 
 @dataclass
@@ -119,9 +121,10 @@ def token_spans(scores: TokenScores, labels: str, threshold: float) -> list[Span
 
 
 def detect_chunk(views: ChunkViews, scores: dict[str, dict[str, TokenScores]],
-                 thresholds: dict[str, float]) -> set[tuple[int, int, str]]:
-    """Run all nine pipes on one chunk.  ``scores[model_key][string]`` holds the single
-    forward pass per string; returns (start, end, domain) in chunk offsets."""
+                 thresholds: dict[str, float],
+                 skip: frozenset[str] = frozenset()) -> set[tuple[int, int, str]]:
+    """Run the nine pipes (less those in ``skip``) on one chunk.  ``scores[model_key][string]``
+    holds the single forward pass per string; returns (start, end, domain) in chunk offsets."""
     text = views.text
     found: set[tuple[int, int, str]] = set()
     rule_cache: dict[Callable, list[Span]] = {}
@@ -132,6 +135,8 @@ def detect_chunk(views: ChunkViews, scores: dict[str, dict[str, TokenScores]],
             found.add((*span, domain))
 
     for domain, pipe in DOMAIN_PIPES.items():
+        if domain in skip:
+            continue
         threshold = thresholds.get(domain, 0.5)
         for det in pipe:
             if isinstance(det, Rule):

@@ -21,6 +21,26 @@ DOMAIN_TAGS: dict[str, str] = {
 DOMAINS: tuple[str, ...] = tuple(DOMAIN_TAGS)
 MARKER_OPEN, MARKER_CLOSE, MARKER_JOIN = '[[', ']]', '/'
 
+# The words of the FUSION TAPE acronym → the domain each one switches off in redact(skip=…).
+SKIP_KEYWORDS: dict[str, str] = {
+    'filepaths': 'filepath', 'usernames': 'username', 'ids': 'id', 'organisations': 'organisation',
+    'names': 'name', 'telephone': 'telephone', 'address': 'address', 'password': 'password',
+    'email': 'email',
+}
+
+
+def skipped_domains(skip) -> frozenset[str]:
+    """``'Names'`` or ``['names', 'email']`` → the set of domains to leave out."""
+    if skip is None:
+        return frozenset()
+    if not isinstance(skip, (str, list, tuple, set, frozenset)):
+        raise TypeError('skip must be a keyword or a list of keywords')
+    words = [skip] if isinstance(skip, str) else list(skip)
+    unknown = [w for w in words if not isinstance(w, str) or w.strip().lower() not in SKIP_KEYWORDS]
+    if unknown:
+        raise ValueError(f'skip: unknown keyword(s) {unknown}; use any of {list(SKIP_KEYWORDS)}')
+    return frozenset(SKIP_KEYWORDS[w.strip().lower()] for w in words)
+
 
 def marker(domains: Iterable[str]) -> str:
     """``{'username', 'name'}`` → ``'[[NAME/USERNAME]]'``."""

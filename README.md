@@ -71,14 +71,31 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-To import FUSION TAPE from any folder, not only from this one, install it into the environment:
+### Using it in another project
+
+Every module sits directly in the repository folder, so the folder itself is the package. Drop
+it into your project under the name `fusion_tape` (a hyphen is not allowed in an `import`):
 
 ```bash
-pip install -e .
+git clone https://github.com/JackCollins91/fusion-tape.git fusion_tape
 ```
 
-After that, `from fusion_tape import redact` works in any script or notebook, and it still reads
-the `settings.yaml` in this repository.
+```
+your_project/
+├── your_script.py        from fusion_tape import redact
+└── fusion_tape/          this repository
+```
+
+If the folder keeps the name `fusion-tape`, import it by name instead:
+
+```python
+import importlib
+redact = importlib.import_module('fusion-tape').redact
+```
+
+The `models/`, `log/` and `outputs/` folders are created next to the script that calls
+`redact()`, not inside the package. Alternatively, `pip install -e .` from inside the folder
+makes `fusion_tape` importable from anywhere.
 
 Then run the demo:
 
@@ -107,13 +124,14 @@ python -m pytest tests -q
 There is one function.
 
 ```python
-redacted, log = redact(text, log=False)
+redacted, log = redact(text, log=False, skip=None)
 ```
 
 | Parameter | Type | Meaning |
 |---|---|---|
 | `text` | `str` or `list[str]` | One text, or a list of texts that are processed together in batches. |
 | `log` | `bool`, default `False` | Also return a per-text log. |
+| `skip` | `str` or `list[str]`, default `None` | Domain pipes to leave out, named by keyword (see [Skipping domains](#skipping-domains)). |
 
 | Returned | Type | Meaning |
 |---|---|---|
@@ -143,6 +161,29 @@ for original, found, milliseconds in log:
 {'marcus_oyelaran': '[[NAME/USERNAME]]'} 39.143
 {'accounts@brightwater-analytics.co.uk': '[[EMAIL]]'} 42.861
 ```
+
+### Skipping domains
+
+`skip` leaves whole domain pipes out of the pipeline. The keywords are the words of the acronym,
+in any letter case; anything else raises `ValueError`.
+
+| Keyword | Pipe left out | | Keyword | Pipe left out |
+|---|---|---|---|---|
+| `filepaths` | FILEPATH | | `telephone` | TELEPHONE |
+| `usernames` | USERNAME | | `address` | ADDRESS |
+| `ids` | ID | | `password` | PASSWORD |
+| `organisations` | ORGANISATION | | `email` | EMAIL |
+| `names` | NAME | | | |
+
+```python
+redact(text, skip='email')                    # keep e-mail addresses readable
+redact(text, skip=['names', 'usernames'])     # keep people's names readable
+```
+
+Skipping a pipe stops *that pipe* from censoring. Another pipe can still cover the same string:
+the USERNAME pipe also reads name labels, so to keep names readable skip both `names` and
+`usernames`. When no remaining pipe needs a text view or the models, they are not run, so
+skipping also saves time.
 
 **Markers.** The nine tags are `NAME`, `USERNAME`, `EMAIL`, `TELEPHONE`, `ADDRESS`,
 `ORGANISATION`, `ID`, `PASSWORD` and `FILEPATH`. When more than one domain flags the same
@@ -314,21 +355,22 @@ anything a model wrote, so every other character is returned exactly as it came 
 
 ## Project layout
 
+Everything is on one level; the folder is the package.
+
 ```
+__init__.py            exports redact()
 settings.yaml          directories, models, runtime, chunking, thresholds
+settings.py            loads settings.yaml, resolves the directories
+engine.py              chunk → score once → pipes → merge, batching, timing, run log
+scorer.py              model download/load, one-pass token scoring per domain
+pipes.py               the nine domain pipes and the threshold rule
+chunking.py            four-pass chunker
+normalise.py           the normalised and drop-first views
+rules.py               regex detectors
+spans.py               markers, skip keywords, span merging, rendering
 demo.py                example run with logging → outputs/ and log/, then the benchmark run
 .Benchmark-Report.md   latest benchmark result (written by demo.py, committed)
 requirements.txt
-pyproject.toml         lets `pip install -e .` make fusion_tape importable anywhere
-fusion_tape/
-  __init__.py          makes the folder a package; exports redact()
-  settings.py          loads settings.yaml, resolves the directories
-  engine.py            chunk → score once → pipes → merge, batching, timing, run log
-  models.py            model download/load, one-pass token scoring per domain
-  pipes.py             the nine domain pipes and the threshold rule
-  chunking.py          four-pass chunker
-  normalise.py         the normalised and drop-first views
-  rules.py             regex detectors
-  spans.py             markers, span merging, rendering
-tests/                 offline tests (no model download)
+pyproject.toml         optional: `pip install -e .`
+tests/                 offline tests (no model download): python -m pytest tests -q
 ```

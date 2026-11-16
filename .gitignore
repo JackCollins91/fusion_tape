@@ -185,3 +185,4 @@ outputs/
 log/
 # benchmark texts pulled in by demo.py
 benchmarks/
+/.vscode

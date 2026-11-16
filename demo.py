@@ -26,9 +26,14 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from fusion_tape import DOMAIN_TAGS, get_settings, redact
+import importlib
 
 HERE = Path(__file__).resolve().parent
+
+# This script sits inside the package folder, so import that folder by its own name.
+sys.path.insert(0, str(HERE.parent))
+fusion_tape = importlib.import_module(HERE.name)
+DOMAIN_TAGS, get_settings, redact = fusion_tape.DOMAIN_TAGS, fusion_tape.get_settings, fusion_tape.redact
 
 # ── 1. Example ────────────────────────────────────────────────────────────────
 # Every name, number, address and credential here is made up.

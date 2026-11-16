@@ -12,7 +12,7 @@ import pytest
 import fusion_tape
 from fusion_tape import engine as engine_module
 from fusion_tape.engine import Engine
-from fusion_tape.models import MODEL_DOMAINS, TokenScores
+from fusion_tape.scorer import MODEL_DOMAINS, TokenScores
 from fusion_tape.pipes import token_spans
 from fusion_tape.settings import load_settings
 from fusion_tape.spans import marker, merge_spans, render
@@ -155,6 +155,35 @@ def test_only_censored_characters_change(stub_engine):
 def test_rejects_non_strings(stub_engine):
     with pytest.raises(TypeError):
         fusion_tape.redact(['ok', 3])
+
+
+# ── skip ──────────────────────────────────────────────────────────────────────
+def test_skip_leaves_out_the_named_pipes(stub_engine):
+    text = 'Call Jane today, mail ops@example.com'
+    assert fusion_tape.redact(text, skip='email')[0] == f'Call {NAME} today, mail ops@example.com'
+    assert fusion_tape.redact(text, skip=['Names', 'USERNAMES'])[0] == 'Call Jane today, mail [[EMAIL]]'
+    # The USERNAME pipe reads name labels too, so skipping names alone still tapes the name over.
+    assert fusion_tape.redact(text, skip='names')[0] == 'Call [[USERNAME]] today, mail [[EMAIL]]'
+
+
+def test_skip_appears_in_neither_text_nor_log(stub_engine):
+    redacted, log = fusion_tape.redact('login from john_smith today', log=True, skip=['usernames', 'names'])
+    assert redacted == 'login from john_smith today' and log[0][1] == {}
+
+
+def test_skip_rejects_unknown_keywords(stub_engine):
+    for bad in ('name', 'phone', ['email', 'emails'], ['names', 3]):
+        with pytest.raises(ValueError):
+            fusion_tape.redact('text', skip=bad)
+    with pytest.raises(TypeError):
+        fusion_tape.redact('text', skip=3)
+
+
+def test_models_are_not_run_when_every_model_pipe_is_skipped(stub_engine):
+    every_model_pipe = ['usernames', 'ids', 'organisations', 'names', 'telephone', 'address', 'password']
+    assert fusion_tape.redact('Call Jane, mail ops@example.com', skip=every_model_pipe)[0] == \
+        'Call Jane, mail [[EMAIL]]'
+    assert stub_engine.models[0].calls == [] or all(not c for c in stub_engine.models[0].calls)
 
 
 # ── One model run per unique string ───────────────────────────────────────────
