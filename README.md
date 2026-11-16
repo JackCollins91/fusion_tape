@@ -73,24 +73,17 @@ pip install -r requirements.txt
 
 ### Using it in another project
 
-Every module sits directly in the repository folder, so the folder itself is the package. Drop
-it into your project under the name `fusion_tape` (a hyphen is not allowed in an `import`):
+Every module sits directly in the repository folder, so the folder itself is the package. Clone
+it into your project and import it:
 
 ```bash
-git clone https://github.com/JackCollins91/fusion-tape.git fusion_tape
+git clone https://github.com/JackCollins91/fusion_tape.git
 ```
 
 ```
 your_project/
 ├── your_script.py        from fusion_tape import redact
 └── fusion_tape/          this repository
-```
-
-If the folder keeps the name `fusion-tape`, import it by name instead:
-
-```python
-import importlib
-redact = importlib.import_module('fusion-tape').redact
 ```
 
 The `models/`, `log/` and `outputs/` folders are created next to the script that calls
